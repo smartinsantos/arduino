@@ -6,12 +6,12 @@
 // RFID music box, phase 1: tap a card, see its ID on the LCD and in the Serial Monitor.
 // Phase 2 will map those IDs to folders of songs on the MP3 player.
 
-// RC522 reader on the Mega's hardware SPI pins (MOSI 51, MISO 50, SCK 52).
-const int RFID_SS_PIN = 53;
-const int RFID_RST_PIN = 49;
+// RC522 reader on the Uno's hardware SPI pins (MOSI 11, MISO 12, SCK 13).
+const int RFID_SS_PIN = 10;
+const int RFID_RST_PIN = 9;
 
 // LCD1602 in 4-bit parallel mode: RS, E, D4, D5, D6, D7.
-const int LCD_RS = 7, LCD_E = 8, LCD_D4 = 9, LCD_D5 = 10, LCD_D6 = 11, LCD_D7 = 12;
+const int LCD_RS = 2, LCD_E = 3, LCD_D4 = 4, LCD_D5 = 5, LCD_D6 = 6, LCD_D7 = 7;
 const int LCD_COLS = 16;
 
 const unsigned long SHOW_CARD_MS = 3000;  // how long a card's ID stays on screen
@@ -38,13 +38,13 @@ String formatUid(const MFRC522::Uid &uid) {
 
 void showIdle() {
   lcd.clear();
-  lcd.print("Tap a card...");
+  lcd.print(F("Tap a card..."));
   showingCard = false;
 }
 
 void showCard(const String &uidText) {
   lcd.clear();
-  lcd.print("Card:");
+  lcd.print(F("Card:"));
   lcd.setCursor(0, 1);
   lcd.print(uidText);
   showingCard = true;
@@ -57,7 +57,18 @@ void setup() {
   SPI.begin();
   rfid.PCD_Init();
 
-  Serial.println("RFID music box - phase 1. Tap a card.");
+  Serial.println(F("RFID music box - phase 1. Tap a card."));
+
+  // A missing or miswired reader answers 0x00 or 0xFF instead of a chip version.
+  byte version = rfid.PCD_ReadRegister(MFRC522::VersionReg);
+  if (version == 0x00 || version == 0xFF) {
+    Serial.println(F("RC522 not found - check its wiring and 3.3V."));
+    lcd.print(F("RFID not found"));
+    lcd.setCursor(0, 1);
+    lcd.print(F("Check wiring"));
+    while (true) {}
+  }
+
   showIdle();
 }
 
@@ -65,7 +76,7 @@ void loop() {
   if (rfid.PICC_IsNewCardPresent() && rfid.PICC_ReadCardSerial()) {
     String uidText = formatUid(rfid.uid);
     showCard(uidText);
-    Serial.print("Card UID: ");
+    Serial.print(F("Card UID: "));
     Serial.println(uidText);
 
     // Put the card to sleep so a card left on the reader is reported once, not every loop.

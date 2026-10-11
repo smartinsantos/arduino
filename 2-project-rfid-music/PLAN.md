@@ -14,7 +14,7 @@ The work is split into three phases:
 
 | Topic | Decision | Why |
 |---|---|---|
-| Board | Arduino **Mega 2560** (from the Elegoo kit) | It has spare hardware serial ports for the MP3 player, 8KB of RAM and lots of pins. The Uno would need SoftwareSerial and would run out of pins. |
+| Board | Arduino **Uno** (the same board as the mini piano) | It's the board on hand. It fits, but only just: every pin except D0/D1 is used by phase 2 (see the pin table), the DFPlayer needs SoftwareSerial, and RAM is 2KB, so keep strings in flash with `F()`. |
 | Display | **LCD1602**, 4-bit parallel wiring | 16x2 characters is enough for a title and "Song 2 of 7". The kit's 8x8 matrix and 7-segment displays can't show words well. |
 | LCD contrast | **Fixed resistor** from V0 to GND (start with 1k ohm) | The kit's potentiometer is used for volume. |
 | MP3 module | **DFPlayer Mini** (DFRobot, Amazon B089D5NLW1) | It plays from the microSD card we already have and is the most-used module with Arduino. Rejected: DFPlayer Pro (128MB built-in memory, few examples). |
@@ -24,37 +24,41 @@ The work is split into three phases:
 | SD layout | Numbered folders `01`..`99`, files `001.mp3`..`255.mp3` | The DFPlayer only understands numbered folders. The readable name lives in `cards.h`. |
 | Song count | Ask the module with `readFileCountsInFolder()` | Adding songs to a folder needs no code change. Fallback: move on until the module reports "file not found". |
 | Volume | Potentiometer on A0, mapped to 0..`MAX_VOLUME` (start at 20 of 30) | Even a full turn stays safe for small ears. |
-| Power | 5V/2A USB charger or power bank into the Mega's USB port | The DFPlayer takes power from the Mega's 5V pin. A power bank makes it portable. |
+| Power | 5V/2A USB charger or power bank into the Uno's USB port | The DFPlayer takes power from the Uno's 5V pin. The RC522 uses the Uno's own 3.3V pin (no resistor or diode needed). A power bank makes it portable. |
 | Libraries | `miguelbalboa/MFRC522`, `arduino-libraries/LiquidCrystal`, `dfrobot/DFRobotDFPlayerMini` (phase 2) | |
 | Tests | None automated. A manual checklist per phase (below) | Same as the mini piano: it's mostly wiring and timing. |
 
-## Pin assignments (Mega 2560)
+## Pin assignments (Uno)
 
-| Part | Part pin | Mega pin | Notes |
+Every pin from D2 to A5 is spoken for once phase 2 is wired. D0/D1 stay free for USB (upload and Serial Monitor).
+
+| Part | Part pin | Uno pin | Notes |
 |---|---|---|---|
-| RC522 | SDA (SS) | D53 | |
-| RC522 | SCK | D52 | |
-| RC522 | MOSI | D51 | |
-| RC522 | MISO | D50 | |
-| RC522 | RST | D49 | |
-| RC522 | 3.3V | **3.3V** | **Not 5V.** |
+| RC522 | SDA (SS) | D10 | |
+| RC522 | MOSI | D11 | Hardware SPI, fixed on the Uno. |
+| RC522 | MISO | D12 | Hardware SPI. |
+| RC522 | SCK | D13 | Hardware SPI. |
+| RC522 | RST | D9 | |
+| RC522 | 3.3V | **3.3V** | **Not 5V.** The Uno makes 3.3V itself; the pin is on the power header between RESET and 5V. |
 | RC522 | GND | GND | IRQ is not connected. |
 | LCD1602 | VSS, RW, K | GND | |
 | LCD1602 | VDD | 5V | |
 | LCD1602 | V0 | 1k ohm to GND | Contrast. Use a higher value if you see solid blocks, lower if the text is faint. |
 | LCD1602 | A | 220 ohm to 5V | Backlight. |
-| LCD1602 | RS, E | D7, D8 | |
-| LCD1602 | D4, D5, D6, D7 | D9, D10, D11, D12 | D0-D3 are not connected. |
+| LCD1602 | RS, E | D2, D3 | |
+| LCD1602 | D4, D5, D6, D7 | D4, D5, D6, D7 | Same numbers on both ends. LCD D0-D3 are not connected. |
 | *Phase 2* | | | |
 | DFPlayer | VCC, GND | 5V, GND | |
-| DFPlayer | RX | D18 (TX1) **through 1k ohm** | Cuts hiss and protects the module's 3.3V input. |
-| DFPlayer | TX | D19 (RX1) | |
-| DFPlayer | BUSY | D28 | LOW while a song is playing. |
+| DFPlayer | TX | D8 | SoftwareSerial RX. |
+| DFPlayer | RX | A1 **through 1k ohm** | SoftwareSerial TX. The resistor cuts hiss and protects the module's 3.3V input. |
+| DFPlayer | BUSY | A2 | LOW while a song is playing. |
 | DFPlayer | SPK1, SPK2 | Speaker | Connect the speaker directly. Never connect SPK to GND. |
 | Potentiometer | outer legs, wiper | 5V and GND, **A0** | |
-| Button "previous" | | D22 to GND | `INPUT_PULLUP`. Left button. |
-| Button "play/pause" | | D24 to GND | `INPUT_PULLUP`. Middle button. |
-| Button "next" | | D26 to GND | `INPUT_PULLUP`. Right button. |
+| Button "previous" | | A3 to GND | `INPUT_PULLUP`. Left button. |
+| Button "play/pause" | | A4 to GND | `INPUT_PULLUP`. Middle button. |
+| Button "next" | | A5 to GND | `INPUT_PULLUP`. Right button. |
+
+If a pin is ever needed for something else, the three buttons can share one analog pin through a resistor ladder, which frees two pins.
 
 ## Phase 1: reader and LCD
 
@@ -69,10 +73,11 @@ What it does:
 
 Tasks:
 - [x] Rename `1-project` to `1-project-mini-piano`
-- [x] `platformio.ini` for the Mega, with the MFRC522 and LiquidCrystal libraries
-- [x] `src/main.cpp`, phase 1 sketch (builds: 4% RAM, 3% flash)
+- [x] `platformio.ini` for the Uno, with the MFRC522 and LiquidCrystal libraries
+- [x] `src/main.cpp`, phase 1 sketch (builds: 20% RAM, 23% flash). On startup it checks the reader answers, and shows `RFID not found` if not.
 - [x] `README.md` and `assets/phase-1-rfid-lcd.pdf` schematic
-- [ ] Wire it on the breadboard and upload
+- [x] Upload to the Uno (boots and prints its startup message)
+- [ ] Wire it on the breadboard
 - [ ] Hardware check:
   - [ ] LCD shows `Tap a card...`. Swap the contrast resistor if the text is blank or shows solid blocks.
   - [ ] The kit's card and blue key fob each show a different, stable ID every time they're tapped
@@ -129,7 +134,8 @@ There is no sleep timeout. A paused box stays paused until a button or card is u
 
 ### Implementation notes
 
-- The DFPlayer runs on `Serial1` at 9600 baud, using `DFRobotDFPlayerMini`. Call `begin(Serial1, true, false)` (ACK on, no reset) and wait about 1s after power-up.
+- The DFPlayer runs on `SoftwareSerial(8, A1)` (RX, TX) at 9600 baud, using `DFRobotDFPlayerMini`. Call `begin(mp3Serial, true, false)` (ACK on, no reset) and wait about 1s after power-up. Hardware `Serial` stays free for the Serial Monitor.
+- RAM is 2KB. Keep every string literal in flash with `F()`, keep the `cards.h` table in `PROGMEM` if it grows past about 20 cards, and check the RAM figure after each build (aim to stay under about 75%).
 - Detecting the end of a song: BUSY takes a few hundred ms to go LOW after a play command. Ignore BUSY for about 500ms after each command so a new song isn't mistaken for a finished one. BUSY is also HIGH while paused, so only count it as "song ended" while in the playing state.
 - Card changes are found by comparing the formatted ID with the current card's ID. A card left on the reader just repeats the same ID, so nothing happens. No removal detection is needed.
 - Buttons are debounced about 30ms, and act on the press (HIGH to LOW), not while held.
@@ -152,7 +158,7 @@ There is no sleep timeout. A paused box stays paused until a button or card is u
 Known constraints:
 - The RC522 reads only about 2-3cm away. The lid over the reader must be **thin (3mm or less) and non-metal**. Mark the tap spot on the lid.
 - It needs cutouts for the LCD window, volume knob, three buttons (previous | play/pause | next) and speaker grille, plus a way out for the USB power cable.
-- The wiring moves from the breadboard to something permanent (a Mega prototype shield or perfboard, with soldered joints).
+- The wiring moves from the breadboard to something permanent (an Uno prototype shield or perfboard, with soldered joints).
 - It has to survive a 4-year-old: no loose wires, no sharp edges, nothing small enough to swallow.
 
 Open questions for the phase 3 design session: the box material (wood craft box, project box or 3D print), where the parts mount, the power switch, and a way to get the SD card out without opening the box.
