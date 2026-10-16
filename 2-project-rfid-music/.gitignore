@@ -3,3 +3,6 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+
+# Music for the SD card: too big for git. assets/mp3/CREDITS.md lists each file and its source.
+assets/mp3/*/*.mp3
