@@ -29,5 +29,5 @@ Read and follow these before the work they cover:
 
 - 2KB SRAM, 32KB flash (0.5KB taken by the bootloader), 1KB EEPROM. When looking up registers, timers or peripheral limits, use the ATmega328P datasheet.
 - Keep string literals in flash with `F()`, and keep RAM under about 75% after each build.
-- In `2-project-rfid-music`, every pin from D2 to A5 is already assigned (see `PLAN.md`); D0/D1 stay free for USB serial. A new part needs a pin plan before code.
+- In `2-project-rfid-music`, only D5, D6, D7 and A3 are free (see `PLAN.md`); D0/D1 stay free for USB serial. A new part needs a pin plan before code.
 - Buttons are wired pin-to-GND with `INPUT_PULLUP` (pressed reads `LOW`).

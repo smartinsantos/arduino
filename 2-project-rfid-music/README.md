@@ -8,7 +8,7 @@ The project is built in phases. The full plan, the decisions behind it and the b
 |---|---|---|
 | 1 | RFID reader and LCD: tap a card, see its ID | Done |
 | 2 | MP3 player, volume knob, previous / play-pause / next buttons | Built. Cards play their folders; the knob and buttons wait for a hardware test |
-| 3 | Put it all in a box | Later |
+| 3 | Put it all in a box: 3D-printed case, proto shield, I2C LCD, arcade buttons | Designed. Parts to order, case to print, then assembly |
 
 ## What it does
 
@@ -21,7 +21,7 @@ The project is built in phases. The full plan, the decisions behind it and the b
   - **Previous** goes back a song (on song 1 it restarts it).
   - **Play/pause** pauses or resumes (`Paused  2`). After a folder has finished, it plays that folder again.
   - **Next** skips a song (after the last song it goes back to song 1).
-- On power-up the LCD shows `Starting...`. If the reader or the MP3 player doesn't answer, it stops at `RFID not found` or `MP3 not found`.
+- On power-up the LCD shows `Starting...`. If the reader or the MP3 player doesn't answer, it stops at `RFID not found` or `MP3 not found`. If the LCD doesn't answer, the box still plays, and the Serial Monitor prints `LCD not found at 0x27 or 0x3F`.
 
 ## Pins
 
@@ -34,36 +34,37 @@ The project is built in phases. The full plan, the decisions behind it and the b
 | | RST | D9 |
 | | 3.3V | **3.3V** |
 | | GND | GND |
-| LCD1602 | RS | D2 |
-| | E | D3 |
-| | D4, D5, D6, D7 | D4, D5, D6, D7 |
-| | VSS, RW, K | GND |
-| | VDD | 5V |
-| | V0 (contrast) | 5.1k ohm resistor to GND |
-| | A (backlight) | 220 ohm resistor to 5V |
+| LCD1602 with I2C backpack | GND, VCC | GND, 5V |
+| | SDA, SCL | A4, A5 |
 | DFPlayer Mini | VCC (pin 1) | 5V |
 | | GND (pin 7) | GND |
 | | TX (pin 3) | D8 |
 | | RX (pin 2) | A1, **through a 1k ohm resistor** |
 | | BUSY (pin 16) | A2 |
-| | SPK_1, SPK_2 (pins 6, 8) | Speaker (either way round) |
+| | DAC_R, DAC_L (pins 4, 5) | Each through a 10k ohm resistor to the amp's L input (SPK_1/SPK_2 stay empty) |
+| PAM8403 amp | 5V, GND, input G | 5V, GND, GND, with a 100 uF capacitor across 5V and GND |
+| | L+, L- | Dayton PC68-4 speaker. Never connect L- to GND |
 | Potentiometer | middle leg | A0 (outer legs to 5V and GND) |
-| Buttons | previous / play-pause / next | A3 / A4 / A5, other leg to GND |
+| Buttons | previous / play-pause / next | D2 / D3 / D4, other leg to GND |
 
-Every pin from D2 to A5 is used. D0/D1 stay free for USB.
+D5, D6, D7 and A3 are free. D0/D1 stay free for USB.
+
+The LCD changed in phase 3: it used to be wired in parallel (RS, E, D4-D7 on D2-D7, plus contrast and backlight resistors) with the buttons on A3-A5. The I2C backpack needs only 4 wires and has its own contrast screw.
 
 ## Wiring
 
-- Phase 1 (reader and LCD): [assets/phase-1-rfid-lcd.pdf](assets/phase-1-rfid-lcd.pdf). Wiring diagram, a pin guide for the RC522, LCD and the Uno's power header, then parts and tips.
-- Phase 2 (MP3 player, knob, buttons): [assets/phase-2-mp3.pdf](assets/phase-2-mp3.pdf). Wiring diagram, a DFPlayer pin guide, a knob and button guide, then parts and tips.
+- Phase 3 (the box, **current wiring**): [assets/phase-3-box.pdf](assets/phase-3-box.pdf). Shopping list with Amazon links, 3D printing notes for the case, the wiring through the proto shield, and step-by-step assembly.
+- Phase 1 (reader and LCD): [assets/phase-1-rfid-lcd.pdf](assets/phase-1-rfid-lcd.pdf). Wiring diagram, a pin guide for the RC522, LCD and the Uno's power header, then parts and tips. Shows the old parallel LCD wiring.
+- Phase 2 (MP3 player, knob, buttons): [assets/phase-2-mp3.pdf](assets/phase-2-mp3.pdf). Wiring diagram, a DFPlayer pin guide, a knob and button guide, then parts and tips. Shows the old LCD wiring, the buttons on A3-A5 and the speaker on the DFPlayer's SPK pins. Both older PDFs carry a "superseded" note.
 
 In short:
 
 - **RFID reader**: power it from the Uno's **3.3V** pin, never 5V. The Uno makes 3.3V itself: the pin is on the power header, between RESET and 5V. No resistor or diode needed. Leave IRQ unconnected. Solder the header pins if they're loose.
-- **LCD**: only data pins D4-D7 are used, each to the Uno pin with the same number. Leave D0-D3 empty. Contrast comes from a fixed resistor on V0, because the potentiometer is the volume knob. Faint text: use a smaller resistor. Solid blocks: use a bigger one.
+- **LCD**: an LCD1602 with an I2C backpack soldered on the back: GND, VCC, SDA (A4), SCL (A5). Turn the blue screw on the backpack until the text is sharp. The sketch finds the backpack at address 0x27 or 0x3F by itself.
+- **Speaker and amp**: the speaker is a Dayton Audio PC68-4 (2.5", 4 ohm), driven by a PAM8403 class-D amp. The amp takes the DFPlayer's line output (DAC_L and DAC_R, mixed through two 10k resistors), which sounds much cleaner than the DFPlayer's own small amp. The knob still works: the DFPlayer's volume sets the DAC level too. Phases 1-2 drove a small CQRobot speaker straight from SPK_1/SPK_2.
 - **DFPlayer**: hold it with the microSD slot facing you and the half-moon notch at the top. Pin 1 (VCC) is then top-left and BUSY is top-right. The 1k resistor on RX is required: it protects the module and cuts hiss.
 - **Knob**: middle leg to A0. If turning clockwise makes it quieter, swap the outer legs.
-- **Buttons**: use two diagonal legs, one to the Uno pin and one to GND. That works whichever way the button is turned. No resistor needed.
+- **Buttons**: each button connects its Uno pin (D2, D3, D4) to GND when pressed. No resistor needed. On a breadboard, use two diagonal legs of the kit's buttons; in the box, the arcade buttons' two switch tabs.
 - **Power and GND**: run the Uno's 5V and GND to the breadboard rails. Use a 5V/2A USB charger: at high volume, a weak supply can make the board reset.
 
 ## Music and cards
@@ -88,7 +89,7 @@ To add a card: tap it, copy the ID that `New card:` shows into a new line in `sr
 
 ## Build and upload
 
-This is a [PlatformIO](https://platformio.org/) project (board: `uno`, framework: `arduino`). The libraries in `platformio.ini` (MFRC522, LiquidCrystal, DFRobotDFPlayerMini) download on the first build.
+This is a [PlatformIO](https://platformio.org/) project (board: `uno`, framework: `arduino`). The libraries in `platformio.ini` (MFRC522, LiquidCrystal_I2C, DFRobotDFPlayerMini) download on the first build.
 
 ```sh
 pio run                # build
@@ -105,6 +106,12 @@ On Apple Silicon Macs, PlatformIO's AVR compiler is an Intel binary, so Rosetta 
 softwareupdate --install-rosetta --agree-to-license
 ```
 
+## The box
+
+The case is two 3D-printed parts: a base that holds the Uno (its USB port lines up with a hole in the left wall) and a lid with the LCD, the tap zone over the reader, three 24 mm arcade buttons, a big volume knob and a round grille over the 2.5" speaker. The wiring is soldered to a proto shield, and every lid part plugs into it with a JST-XH plug.
+
+The files are in [assets/3d/](assets/3d/): `base.stl`, `lid.stl`, `knob.stl` and `fit_test.stl`, already turned for printing. `make_box.py` makes them from the measurements at its top (`pip install manifold3d trimesh numpy`, then `python3 make_box.py`), and checks that the parts inside don't collide. The full build, from the shopping list to closing the lid, is in [assets/phase-3-box.pdf](assets/phase-3-box.pdf).
+
 ## Layout
 
 ```
@@ -112,7 +119,8 @@ platformio.ini      board, framework and libraries
 src/main.cpp        the sketch
 src/cards.h         which card plays which folder, and its title
 PLAN.md             phases, decisions, pins, behavior table, tasks
-assets/             wiring schematics (PDF), one per phase
+assets/             wiring schematics (PDF), one per phase; phase 3 is the build guide
+assets/3d/          3D-printable case (STL) and make_box.py, which generates it
 assets/mp3/         sample music, laid out like the SD card (MP3s not in git)
 ```
 

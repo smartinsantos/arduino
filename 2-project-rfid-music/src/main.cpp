@@ -1,9 +1,10 @@
 #include <Arduino.h>
 #include <DFRobotDFPlayerMini.h>
-#include <LiquidCrystal.h>
+#include <LiquidCrystal_I2C.h>
 #include <MFRC522.h>
 #include <SPI.h>
 #include <SoftwareSerial.h>
+#include <Wire.h>
 
 #include "cards.h"
 
@@ -15,8 +16,10 @@
 const int RFID_SS_PIN = 10;
 const int RFID_RST_PIN = 9;
 
-// LCD1602 in 4-bit parallel mode: RS, E, D4, D5, D6, D7.
-const int LCD_RS = 2, LCD_E = 3, LCD_D4 = 4, LCD_D5 = 5, LCD_D6 = 6, LCD_D7 = 7;
+// LCD1602 with an I2C backpack, on the Uno's I2C pins (SDA = A4, SCL = A5).
+// Most backpacks answer at address 0x27, some at 0x3F; setup() uses whichever answers.
+const uint8_t LCD_ADDRESS = 0x27;
+const uint8_t LCD_ADDRESS_ALT = 0x3F;
 const int LCD_COLS = 16;
 
 // DFPlayer Mini on SoftwareSerial, so the hardware Serial stays free for USB.
@@ -26,9 +29,9 @@ const int MP3_BUSY_PIN = A2;  // LOW while a song is playing
 
 // Volume knob (potentiometer middle leg) and buttons (pin to GND, pressed = LOW).
 const int VOLUME_PIN = A0;
-const int PREV_PIN = A3;
-const int PLAY_PAUSE_PIN = A4;
-const int NEXT_PIN = A5;
+const int PREV_PIN = 2;
+const int PLAY_PAUSE_PIN = 3;
+const int NEXT_PIN = 4;
 
 const uint8_t MAX_VOLUME = 30;  // full turn of the knob = the module's maximum
 
@@ -39,7 +42,9 @@ const int KNOB_DEADBAND = 24;              // ignore knob jitter smaller than th
 const unsigned long DEBOUNCE_MS = 30;
 
 MFRC522 rfid(RFID_SS_PIN, RFID_RST_PIN);
-LiquidCrystal lcd(LCD_RS, LCD_E, LCD_D4, LCD_D5, LCD_D6, LCD_D7);
+LiquidCrystal_I2C lcdAtMain(LCD_ADDRESS, LCD_COLS, 2);
+LiquidCrystal_I2C lcdAtAlt(LCD_ADDRESS_ALT, LCD_COLS, 2);
+LiquidCrystal_I2C *lcd = &lcdAtMain;  // switched to lcdAtAlt in setup() if that one answers
 SoftwareSerial mp3Serial(MP3_RX_PIN, MP3_TX_PIN);
 DFRobotDFPlayerMini player;
 
@@ -98,11 +103,16 @@ bool findCard(const char *uidText, Card &found) {
   return false;
 }
 
+bool i2cAnswers(uint8_t address) {
+  Wire.beginTransmission(address);
+  return Wire.endTransmission() == 0;
+}
+
 void halt(const __FlashStringHelper *line1, const __FlashStringHelper *line2) {
-  lcd.clear();
-  lcd.print(line1);
-  lcd.setCursor(0, 1);
-  lcd.print(line2);
+  lcd->clear();
+  lcd->print(line1);
+  lcd->setCursor(0, 1);
+  lcd->print(line2);
   while (true) {}
 }
 
@@ -111,22 +121,22 @@ void halt(const __FlashStringHelper *line1, const __FlashStringHelper *line2) {
 // What the screen shows when nothing temporary is on it.
 void showStatus() {
   if (showingNewCard) return;
-  lcd.clear();
+  lcd->clear();
   if (mode != PLAYING && mode != PAUSED) {
-    lcd.print(F("Tap a card..."));
+    lcd->print(F("Tap a card..."));
     return;
   }
-  lcd.print(current.title);
-  lcd.setCursor(0, 1);
-  lcd.print(mode == PAUSED ? F("Paused  ") : F("Song "));
-  lcd.print(songNumber);
+  lcd->print(current.title);
+  lcd->setCursor(0, 1);
+  lcd->print(mode == PAUSED ? F("Paused  ") : F("Song "));
+  lcd->print(songNumber);
 }
 
 void showNewCard(const char *uidText) {
-  lcd.clear();
-  lcd.print(F("New card:"));
-  lcd.setCursor(0, 1);
-  lcd.print(uidText);
+  lcd->clear();
+  lcd->print(F("New card:"));
+  lcd->setCursor(0, 1);
+  lcd->print(uidText);
   showingNewCard = true;
   newCardShownAt = millis();
 }
@@ -290,7 +300,14 @@ void handlePlayer() {
 
 void setup() {
   Serial.begin(9600);
-  lcd.begin(LCD_COLS, 2);
+  Wire.begin();
+  bool lcdFound = i2cAnswers(LCD_ADDRESS);
+  if (!lcdFound && i2cAnswers(LCD_ADDRESS_ALT)) {
+    lcd = &lcdAtAlt;
+    lcdFound = true;
+  }
+  lcd->init();
+  lcd->backlight();
   SPI.begin();
   rfid.PCD_Init();
   pinMode(MP3_BUSY_PIN, INPUT);
@@ -299,7 +316,9 @@ void setup() {
   pinMode(NEXT_PIN, INPUT_PULLUP);
 
   Serial.println(F("RFID music box - phase 2."));
-  lcd.print(F("Starting..."));
+  // Without a screen the box still plays; this just says why the screen is blank.
+  if (!lcdFound) Serial.println(F("LCD not found at 0x27 or 0x3F - check its 4 wires."));
+  lcd->print(F("Starting..."));
 
   // A missing or miswired reader answers 0x00 or 0xFF instead of a chip version.
   byte version = rfid.PCD_ReadRegister(MFRC522::VersionReg);

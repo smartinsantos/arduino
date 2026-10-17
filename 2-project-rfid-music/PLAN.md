@@ -8,30 +8,36 @@ The work is split into three phases:
 |---|---|---|
 | 1 | RFID reader and LCD: tap a card, see its ID | **Done**, tested on the breadboard |
 | 2 | MP3 player, card-to-folder table, volume knob, buttons | **Built.** Stage A (cards play folders) works on the breadboard. Stage B (knob and buttons) is uploaded and waiting for a hardware test |
-| 3 | Put it all in a box | Constraints only. Needs its own design session after phase 2 works |
+| 3 | Put it all in a box | **Designed.** Case files in `assets/3d/`, build guide in `assets/phase-3-box.pdf`. Parts to order, case to print, then assembly |
 
 ## Decisions
 
 | Topic | Decision | Why |
 |---|---|---|
-| Board | Arduino **Uno** (the same board as the mini piano) | It's the board on hand. It fits, but only just: every pin except D0/D1 is used by phase 2 (see the pin table), the DFPlayer needs SoftwareSerial, and RAM is 2KB, so keep strings in flash with `F()`. |
-| Display | **LCD1602**, 4-bit parallel wiring | 16x2 characters is enough for a title and "Song 2". The kit's 8x8 matrix and 7-segment displays can't show words well. |
-| LCD contrast | **5.1k ohm** fixed resistor from V0 to GND (the kit's 5K1) | The kit's potentiometer is used for volume. Found by trying: 220 ohm gave solid blocks, 1k left grey blocks behind faint letters, 5.1k is clear. Other LCD modules may need a different value. |
+| Board | Arduino **Uno** (the same board as the mini piano) | It's the board on hand. With the I2C LCD, D5-D7 and A3 are free (see the pin table). The DFPlayer needs SoftwareSerial, and RAM is 2KB, so keep strings in flash with `F()`. |
+| Display | **LCD1602 with an I2C backpack** (GeeekPi, address 0x27; the sketch also tries 0x3F) | 16x2 characters is enough for a title and "Song 2". Phases 1-2 used the kit's LCD in 4-bit parallel mode; phase 3 switched to I2C: 4 wires to the lid instead of 12, no contrast or backlight resistors, and it frees D5-D7. |
+| LCD contrast | The blue screw on the I2C backpack | Phases 1-2 used a 5.1k ohm fixed resistor on V0 (220 ohm gave solid blocks, 1k was faint). The backpack has its own trimmer. |
 | MP3 module | **DFPlayer Mini** (DFRobot, Amazon B089D5NLW1) | It plays from the microSD card we already have and is the most-used module with Arduino. Rejected: DFPlayer Pro (128MB built-in memory, few examples). |
-| Speaker | **One** CQRobot 3W 8 ohm speaker (B0738NLFTG); the second is a spare | The DFPlayer's amp is mono. |
+| Speaker | **Dayton Audio PC68-4** 2.5" full-range driver, 4 ohm (B0751FW9NP), behind a round grille in the lid | The CQRobot 3W module speakers (B0738NLFTG, used in phases 1-2) sounded thin and harsh. A real 2.5" cone in the sealed box sounds much fuller. Square 68.1 mm frame, 37 mm deep, 4 holes on a 73.4 mm circle. |
+| Amplifier | **PAM8403** class-D board (B00LODGV64) fed from the DFPlayer's DAC_L/DAC_R through two 10k resistors; mono, left channel out | The DFPlayer's built-in amp distorts near the top of its range. The DAC output follows the DFPlayer volume, so the knob and code don't change. Needs no Uno pin. |
 | Tags | **13.56 MHz** MIFARE Classic 1K cards or NTAG213 stickers | The RC522 reads only 13.56 MHz. 125 kHz tags (EM4100, T5577, "proximity") will not work: the first pack bought was 125 kHz T5577 and the reader can't see them. |
 | Card mapping | A table in `src/cards.h`: card ID, folder number, title | It's the only option that gives the LCD real titles. To add a card, read its ID off the screen, add a line and re-upload. |
 | SD layout | Numbered folders `01`..`99`, files `001.mp3`..`255.mp3` | The DFPlayer only understands numbered folders. The readable name lives in `cards.h`. |
 | Song count | **Not asked.** Play on until the module reports "file not found" for the next song | Our DFPlayer is a clone that answers the "files in folder" query (0x4E) with an error; the library then returned a stale "2" and every folder stopped after song 2. "File not found" works reliably, and adding songs still needs no code change. The cost: the LCD shows `Song 3`, not `Song 3 of 5`. |
 | Volume | Potentiometer on A0, mapped to 0..`MAX_VOLUME` = **30** (the module's maximum) | Chosen for maximum loudness; the knob turns it down. Near the top the built-in amp may crackle, and loud bass can reset a weakly powered board: drop `MAX_VOLUME` to 25 if either happens. |
 | Power | 5V/2A USB charger or power bank into the Uno's USB port | The DFPlayer takes power from the Uno's 5V pin. The RC522 uses the Uno's own 3.3V pin (no resistor or diode needed). A power bank makes it portable. |
-| Libraries | `miguelbalboa/MFRC522`, `arduino-libraries/LiquidCrystal`, `dfrobot/DFRobotDFPlayerMini` | |
+| Libraries | `miguelbalboa/MFRC522`, `marcoschwartz/LiquidCrystal_I2C`, `dfrobot/DFRobotDFPlayerMini` | `LiquidCrystal_I2C` replaced `LiquidCrystal` with the I2C LCD. |
+| Case | 3D-printed PETG box, 190 x 140 x 55 mm: base (Uno, shield, DFPlayer) and lid (LCD, reader, buttons, speaker, knob), 4 screws into heat-set inserts | A friend has a printer. Generated by `assets/3d/make_box.py` so sizes can be tuned after the fit test. |
+| Permanent wiring | HiLetgo proto shield on the Uno; every lid part on its own JST-XH plug (J1-J7) | Soldered joints don't shake loose, and the lid lifts off for repairs. The DFPlayer sits in a socket. |
+| Buttons (box) | 24 mm snap-in arcade buttons, Guwarry 2.8 mm-to-XH cables | Big enough for small hands; no soldering at the buttons. |
+| Power and switch | USB charger, then a USB on/off switch cable, then the Uno's own USB port through a hole in the left wall | Nothing extra to wire, and new cards upload without opening the box. |
+| SD card access | Open the lid (4 screws) | Music changes are rare; a side slot would be a part a child can reach. |
 | Sample music | `assets/mp3/01`, `02`, `03`, laid out exactly as on the SD card. The MP3s are not in git; `assets/mp3/CREDITS.md` lists every file's source | About 57 MB is too heavy for the repo. Kevin MacLeod tracks (CC BY 4.0) and LibriVox lullabies (public domain). |
 | Tests | None automated. A manual checklist per phase (below) | Same as the mini piano: it's mostly wiring and timing. |
 
 ## Pin assignments (Uno)
 
-Every pin from D2 to A5 is spoken for once phase 2 is wired. D0/D1 stay free for USB (upload and Serial Monitor).
+Current wiring (phase 3, I2C LCD). D5, D6, D7 and A3 are free. D0/D1 stay free for USB (upload and Serial Monitor). Phases 1-2 wired the LCD in parallel on D2-D7 and the buttons on A3-A5.
 
 | Part | Part pin | Uno pin | Notes |
 |---|---|---|---|
@@ -42,24 +48,22 @@ Every pin from D2 to A5 is spoken for once phase 2 is wired. D0/D1 stay free for
 | RC522 | RST | D9 | |
 | RC522 | 3.3V | **3.3V** | **Not 5V.** The Uno makes 3.3V itself; the pin is on the power header between RESET and 5V. |
 | RC522 | GND | GND | IRQ is not connected. |
-| LCD1602 | VSS, RW, K | GND | |
-| LCD1602 | VDD | 5V | |
-| LCD1602 | V0 | 5.1k ohm to GND | Contrast. Use a higher value if you see blocks behind the text, lower if the text is faint. |
-| LCD1602 | A | 220 ohm to 5V | Backlight. |
-| LCD1602 | RS, E | D2, D3 | |
-| LCD1602 | D4, D5, D6, D7 | D4, D5, D6, D7 | Same numbers on both ends. LCD D0-D3 are not connected. |
+| LCD1602 (I2C backpack) | GND, VCC | GND, 5V | |
+| LCD1602 (I2C backpack) | SDA, SCL | A4, A5 | The Uno's I2C pins. Contrast is the screw on the backpack. |
 | *Phase 2* | | | |
 | DFPlayer | VCC, GND | 5V, GND | |
 | DFPlayer | TX | D8 | SoftwareSerial RX. |
 | DFPlayer | RX | A1 **through 1k ohm** | SoftwareSerial TX. The resistor cuts hiss and protects the module's 3.3V input. |
 | DFPlayer | BUSY | A2 | LOW while a song is playing. |
-| DFPlayer | SPK_1, SPK_2 (pins 6, 8) | Speaker | Connect the speaker directly. Never connect SPK to GND. |
+| DFPlayer | DAC_R, DAC_L (pins 4, 5) | PAM8403 L input, each through 10k ohm | Mixes both channels into the mono amp. SPK_1/SPK_2 are not connected (phases 1-2 wired the speaker there). |
+| PAM8403 | 5V, GND, input G | 5V, GND, GND | 100 uF capacitor across 5V and GND. |
+| PAM8403 | L+, L- | Speaker, through J7 | Never connect L- to GND. The R channel is unused. |
 | Potentiometer | outer legs, wiper | 5V and GND, **A0** | |
-| Button "previous" | | A3 to GND | `INPUT_PULLUP`. Left button. |
-| Button "play/pause" | | A4 to GND | `INPUT_PULLUP`. Middle button. |
-| Button "next" | | A5 to GND | `INPUT_PULLUP`. Right button. |
+| Button "previous" | | D2 to GND | `INPUT_PULLUP`. Left button. |
+| Button "play/pause" | | D3 to GND | `INPUT_PULLUP`. Middle button. |
+| Button "next" | | D4 to GND | `INPUT_PULLUP`. Right button. |
 
-If a pin is ever needed for something else, the three buttons can share one analog pin through a resistor ladder, which frees two pins.
+In the box, each lid part reaches the shield through its own plug: J1 LCD, J2 reader, J3-J5 buttons, J6 knob, J7 speaker (see `assets/phase-3-box.pdf`, page 4).
 
 ## Phase 1: reader and LCD
 
@@ -122,7 +126,7 @@ Titles are 16 characters at most (one LCD line). To add a card: tap it, copy the
 
 | Situation | What happens | LCD line 1 / line 2 |
 |---|---|---|
-| Power on | Checks the reader and the DFPlayer. A missing one stops here. | `Starting...`, then `Tap a card...`, or `RFID not found` / `MP3 not found` |
+| Power on | Checks the reader and the DFPlayer. A missing one stops here. A missing LCD doesn't stop it: Serial prints `LCD not found at 0x27 or 0x3F` and the music still works. | `Starting...`, then `Tap a card...`, or `RFID not found` / `MP3 not found` |
 | No card yet | Nothing plays. All buttons are ignored. | `Tap a card...` |
 | Known card, **different** from the current one | Its folder plays from song 1. Works whether the box is playing, paused or finished. | title / `Song 1` |
 | **Same** card as the current one | Nothing happens, whether playing, paused or finished. Only a change of card counts. | unchanged |
@@ -166,19 +170,34 @@ There is no sleep timeout. A paused box stays paused until a button or card is u
 - [ ] Hardware check: run through every row of the behavior table
 - [ ] Add the 13.56 MHz cards to `cards.h` once they arrive
 
-## Phase 3: the box (to design later)
+## Phase 3: the box
 
-Known constraints:
-- The RC522 reads only about 2-3cm away. The lid over the reader must be **thin (3mm or less) and non-metal**. Mark the tap spot on the lid.
-- It needs cutouts for the LCD window, volume knob, three buttons (previous | play/pause | next) and speaker grille, plus a way out for the USB power cable.
-- The wiring moves from the breadboard to something permanent (an Uno prototype shield or perfboard, with soldered joints).
-- It has to survive a 4-year-old: no loose wires, no sharp edges, nothing small enough to swallow.
+**Goal:** a box a 4-year-old can use: no loose wires, nothing small to swallow, big buttons, a marked spot to tap the card.
 
-Open questions for the phase 3 design session: the box material (wood craft box, project box or 3D print), where the parts mount, the power switch, and a way to get the SD card out without opening the box.
+The full guide is `assets/phase-3-box.pdf`: shopping list with Amazon links, printing notes, wiring through the shield, assembly and a first power-on checklist. The case is generated by `assets/3d/make_box.py`.
+
+Layout of the lid (from the front edge): three 24 mm buttons (previous, play/pause, next, with engraved icons), then the tap zone over the reader (1.5 mm of plastic over the antenna) on the left and the speaker's round grille on the right (4 screws through the lid hold its frame), then the LCD window on the left. The volume knob is at the front right, next to the buttons. The Uno sits in the base under the reader, its USB jack flush with the left wall.
+
+Constraints the design keeps:
+- The RC522 reads only about 2-3 cm away, so the plastic over it is thin and there is no metal near it (screws, speaker magnet).
+- The parts under the lid must clear the Uno stack. `make_box.py` checks this every time it runs (`fit check: OK`).
+- Snap-in buttons want a thin panel, so the lid is counterbored to 2 mm around each button hole.
+
+### Tasks
+
+- [x] Pick parts and the layout; switch the code to the I2C LCD with the buttons on D2-D4 (builds: 36% RAM, 37% flash)
+- [x] Case files (`assets/3d/`) and the build guide (`assets/phase-3-box.pdf`)
+- [ ] Order the parts (guide page 2)
+- [ ] Wire the I2C LCD and the buttons on the breadboard and run the phase 2 behavior table again
+- [ ] Print `fit_test.stl` and adjust `make_box.py` if a fit is off
+- [x] Speaker upgrade: Dayton PC68-4 and a PAM8403 amp in place of the CQRobot speaker
+- [ ] Print the base, lid and knob
+- [ ] Build the shield and the lid cables
+- [ ] Assemble, first power-on checklist, close the lid
 
 ## Ideas for next time
 
 - Continue where you left off (resume the last folder and song after power-off)
 - Sleep timer
-- A second speaker (it would need a stereo amp)
+- A second speaker for stereo (the PAM8403's R channel is free)
 - A short error beep for unknown cards
